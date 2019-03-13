@@ -40,9 +40,12 @@
       gapi.auth2.getAuthInstance().isSignedIn.listen($scope.updateSigninStatus);
 
       // Handle the initial sign-in state.
-      $scope.updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
+      var isSignedIn = gapi.auth2.getAuthInstance().isSignedIn.get();
+      $scope.updateSigninStatus(isSignedIn);
 
-      gapi.auth2.getAuthInstance().signIn();
+      if(!isSignedIn) {
+        gapi.auth2.getAuthInstance().signIn();
+      }      
     }
 
     $scope.updateSigninStatus = function(isSignedIn) {
@@ -51,55 +54,33 @@
       }
 
       if (isSignedIn) {
-        isSigninInProgress = true;
-        console.log("signed in");
+          isSigninInProgress = true;
+          console.log("signed in");
+          var profile = gapi.auth2.getAuthInstance().currentUser.get().getBasicProfile();
 
-        //gapi.auth.authorize({discoveryDocs: GOOGLE_DISCOVERY_DOCS, client_id: GOOGLE_CLIENT_ID, scope: GOOGLE_SCOPES, immediate: true}, handleAuthResult);          
+          if (profile.getEmail() !== null) {
+            if (profile.getEmail().toLowerCase() == AUTHORISED_EMAIL) {
+              $state.go('bookings');
+              AuthenticationService.SetCredentials("", profile.getEmail(), profile.getId(), profile.getName(), profile.getImageUrl());
 
-        gapi.client.load('plus', 'v1', function() {
-          var request = gapi.client.plus.people.get({
-            'userId': 'me'
-          });
-          request.execute(function(userResult) {
-            if (userResult && userResult.hasOwnProperty('error')) // error
-            {
-              Notification.error({
-                message: MESSAGES.ERR_MSG_GET_USER_INFO
+              Notification.success({
+                message: MESSAGES.SUCCESS_MSG_AUTH,
+                title: '<i class="glyphicon glyphicon-remove"></i> ' + MESSAGES.SUCCESS_TITLE_AUTH
               });
-            } else // success
-            {
-              var primaryEmail = null;
-              for (var i = 0; i < userResult.emails.length; i++) {
-                if (userResult.emails[i].type === 'account')
-                  primaryEmail = userResult.emails[i].value;
-              }
 
-              if (primaryEmail !== null) {
-                if (primaryEmail.toLowerCase() == AUTHORISED_EMAIL) {
-                  $state.go('bookings');
-                  AuthenticationService.SetCredentials("", primaryEmail, userResult.id, userResult.displayName, userResult.image.url);
+              $rootScope.isUserLoggedIn = true;
+              $rootScope.$broadcast('userLoggedIn'); //sending broadcast to update the header name and image                    
+            } else {
+              $mdDialog.show($mdDialog.alert().clickOutsideToClose(true).title(MESSAGES.ERR_MSG_UNAUTHORISED_USER).ok('OK'));
+              setTimeout(function() {
+                gapi.auth2.getAuthInstance().disconnect();
+              }, 1000);
 
-                  Notification.success({
-                    message: MESSAGES.SUCCESS_MSG_AUTH,
-                    title: '<i class="glyphicon glyphicon-remove"></i> '+MESSAGES.SUCCESS_TITLE_AUTH
-                  });
-
-                  $rootScope.isUserLoggedIn = true;
-                  $rootScope.$broadcast('userLoggedIn'); //sending broadcast to update the header name and image                    
-                } else {
-                  $mdDialog.show($mdDialog.alert().clickOutsideToClose(true).title(MESSAGES.ERR_MSG_UNAUTHORISED_USER).ok('OK'));
-                  setTimeout(function() {
-                    gapi.auth2.getAuthInstance().disconnect();
-                  }, 1000);
-
-                }
-              } else {
-                console.log("null");
-                $mdDialog.show($mdDialog.alert().clickOutsideToClose(true).title(MESSAGES.ERR_MSG_PRIMARY_EMAIL).ok('OK'));
-              }
             }
-          });
-        });
+          } else {
+            console.log("null");
+            $mdDialog.show($mdDialog.alert().clickOutsideToClose(true).title(MESSAGES.ERR_MSG_PRIMARY_EMAIL).ok('OK'));
+          }
       } else {
         console.log("not signed in");
       }
